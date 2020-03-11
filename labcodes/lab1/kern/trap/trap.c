@@ -40,6 +40,7 @@ idt_init(void) {
 		SETGATE(idt[i], 0, GD_KTEXT, __vectors[i], DPL_KERNEL);	
 	}
 	lidt(&idt_pd);
+
      /* (1) Where are the entry addrs of each Interrupt Service Routine (ISR)?
       *     All ISR's entry addrs are stored in __vectors. where is uintptr_t __vectors[] ?
       *     __vectors[] is in kern/trap/vector.S which is produced by tools/vector.c

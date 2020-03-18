@@ -102,6 +102,10 @@ alloc_proc(void) {
      *       uint32_t flags;                             // Process flag
      *       char name[PROC_NAME_LEN + 1];               // Process name
      */
+		memset(proc, 0, sizeof(struct proc_struct));
+		proc->state = PROC_UNINIT;
+		proc->pid = -1;
+		proc->cr3 = boot_cr3;
     }
     return proc;
 }
@@ -296,6 +300,16 @@ do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf) {
     //    5. insert proc_struct into hash_list && proc_list
     //    6. call wakeup_proc to make the new child process RUNNABLE
     //    7. set ret vaule using child proc's pid
+	proc = alloc_proc();
+	proc->pid = get_pid();
+	assert(setup_kstack(proc) == 0);
+	assert(copy_mm(clone_flags & CLONE_VM, proc) == 0);
+	copy_thread(proc, stack, tf);
+	hash_proc(proc);
+	list_add_before(&proc_list, &(proc->list_link));
+	wakeup_proc(proc);
+	nr_process++;
+	ret = proc->pid;
 fork_out:
     return ret;
 
@@ -343,11 +357,11 @@ proc_init(void) {
     idleproc->state = PROC_RUNNABLE;
     idleproc->kstack = (uintptr_t)bootstack;
     idleproc->need_resched = 1;
+	extern struct mm_struct *check_mm_struct;
     set_proc_name(idleproc, "idle");
     nr_process ++;
 
     current = idleproc;
-
     int pid = kernel_thread(init_main, "Hello world!!", 0);
     if (pid <= 0) {
         panic("create init_main failed.\n");

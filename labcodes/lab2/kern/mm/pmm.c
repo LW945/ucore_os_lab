@@ -357,7 +357,7 @@ get_pte(pde_t *pgdir, uintptr_t la, bool create) {
         	uintptr_t pa = KADDR(page2pa(p)); 								// (5) get linear address of page
 	    	memset((struct Page *)pa, 0, sizeof(struct Page));				// (6) clear page content using memset        
 			pte = KADDR(&(((pte_t *)(*pdep & ~0x0FFF))[PTX(la)]));
-			*pte = ((la & ~0x0FFF) | PTE_P | PTE_W);
+			//*pte = ((la & ~0x0FFF) | PTE_P | PTE_W);
 		}
 		else{                  				
 			pte = NULL;

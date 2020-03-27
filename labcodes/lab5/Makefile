@@ -37,6 +37,8 @@ QEMU := $(shell if which qemu-system-i386 > /dev/null; \
 	echo "***" 1>&2; exit 1; fi)
 endif
 
+#QEMU := /home/li/software/qemu/qemu-4.2.0/x86_64-softmmu/qemu-system-x86_64
+
 # eliminate default suffix rules
 .SUFFIXES: .c .S .h
 
@@ -271,7 +273,7 @@ QEMUOPTS = -hda $(UCOREIMG) -drive file=$(SWAPIMG),media=disk,cache=writeback
 qemu-mon: $(UCOREIMG) $(SWAPIMG)
 	$(V)$(QEMU)  -no-reboot -monitor stdio $(QEMUOPTS) -serial null
 qemu: $(UCOREIMG) $(SWAPIMG)
-	$(V)$(QEMU)  -no-reboot -parallel stdio $(QEMUOPTS) -serial null
+	$(V)$(QEMU)  -no-reboot -accel tcg -parallel stdio $(QEMUOPTS) -serial null
 
 qemu-nox: $(UCOREIMG) $(SWAPIMG)
 	$(V)$(QEMU)  -no-reboot -serial mon:stdio $(QEMUOPTS) -nographic
@@ -312,7 +314,7 @@ MAKEOPTS		:= --quiet --no-print-directory
 
 grade:
 	$(V)$(MAKE) $(MAKEOPTS) clean
-	$(V)$(SH) tools/grade.sh
+	$(V)$(SH) tools/grade.sh > /home/li/software/Memtime
 
 touch:
 	$(V)$(foreach f,$(TOUCH_FILES),$(TOUCH) $(f))

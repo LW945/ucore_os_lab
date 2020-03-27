@@ -52,7 +52,10 @@ mm_create(void) {
 
         if (swap_init_ok) swap_init_mm(mm);
         else mm->sm_priv = NULL;
-    }
+        
+        set_mm_count(mm, 0);
+        lock_init(&(mm->mm_lock));
+    }    
     return mm;
 }
 
@@ -142,6 +145,7 @@ insert_vma_struct(struct mm_struct *mm, struct vma_struct *vma) {
 // mm_destroy - free mm and mm internal fields
 void
 mm_destroy(struct mm_struct *mm) {
+    assert(mm_count(mm) == 0);
 
     list_entry_t *list = &(mm->mmap_list), *le;
     while ((le = list_next(list)) != list) {
@@ -150,6 +154,92 @@ mm_destroy(struct mm_struct *mm) {
     }
     kfree(mm); //kfree mm
     mm=NULL;
+}
+
+int
+mm_map(struct mm_struct *mm, uintptr_t addr, size_t len, uint32_t vm_flags,
+       struct vma_struct **vma_store) {
+    uintptr_t start = ROUNDDOWN(addr, PGSIZE), end = ROUNDUP(addr + len, PGSIZE);
+    if (!USER_ACCESS(start, end)) {
+        return -E_INVAL;
+    }
+
+    assert(mm != NULL);
+
+    int ret = -E_INVAL;
+
+    struct vma_struct *vma;
+    if ((vma = find_vma(mm, start)) != NULL && end > vma->vm_start) {
+        goto out;
+    }
+    ret = -E_NO_MEM;
+
+    if ((vma = vma_create(start, end, vm_flags)) == NULL) {
+        goto out;
+    }
+    insert_vma_struct(mm, vma);
+    if (vma_store != NULL) {
+        *vma_store = vma;
+    }
+    ret = 0;
+
+out:
+    return ret;
+}
+
+int
+dup_mmap(struct mm_struct *to, struct mm_struct *from) {
+    assert(to != NULL && from != NULL);
+    list_entry_t *list = &(from->mmap_list), *le = list;
+    while ((le = list_prev(le)) != list) {
+        struct vma_struct *vma, *nvma;
+        vma = le2vma(le, list_link);
+        nvma = vma_create(vma->vm_start, vma->vm_end, vma->vm_flags);
+        if (nvma == NULL) {
+            return -E_NO_MEM;
+        }
+
+        insert_vma_struct(to, nvma);
+
+        bool share = 0;
+        if (copy_range(to->pgdir, from->pgdir, vma->vm_start, vma->vm_end, share) != 0) {
+            return -E_NO_MEM;
+        }
+    }
+    return 0;
+}
+
+void
+exit_mmap(struct mm_struct *mm) {
+    assert(mm != NULL && mm_count(mm) == 0);
+    pde_t *pgdir = mm->pgdir;
+    list_entry_t *list = &(mm->mmap_list), *le = list;
+    while ((le = list_next(le)) != list) {
+        struct vma_struct *vma = le2vma(le, list_link);
+        unmap_range(pgdir, vma->vm_start, vma->vm_end);
+    }
+    while ((le = list_next(le)) != list) {
+        struct vma_struct *vma = le2vma(le, list_link);
+        exit_range(pgdir, vma->vm_start, vma->vm_end);
+    }
+}
+
+bool
+copy_from_user(struct mm_struct *mm, void *dst, const void *src, size_t len, bool writable) {
+    if (!user_mem_check(mm, (uintptr_t)src, len, writable)) {
+        return 0;
+    }
+    memcpy(dst, src, len);
+    return 1;
+}
+
+bool
+copy_to_user(struct mm_struct *mm, void *dst, const void *src, size_t len) {
+    if (!user_mem_check(mm, (uintptr_t)dst, len, 1)) {
+        return 0;
+    }
+    memcpy(dst, src, len);
+    return 1;
 }
 
 // vmm_init - initialize virtual memory management
@@ -361,7 +451,6 @@ do_pgfault(struct mm_struct *mm, uint32_t error_code, uintptr_t addr) {
     *   mm->pgdir : the PDT of these vma
     *
     */
-#if 1
     /*LAB3 EXERCISE 1: YOUR CODE*/
 	pde_t *pgdir = mm->pgdir;
     ptep = get_pte(pgdir, addr, 1);              //(1) try to find a pte, if pte's PT(Page Table) isn't existed, then create a PT.
@@ -383,20 +472,45 @@ do_pgfault(struct mm_struct *mm, uint32_t error_code, uintptr_t addr) {
         if(swap_init_ok) {
             struct Page *page=NULL;
             assert(swap_in(mm, addr, &page) == 0);                      //(1）According to the mm AND addr, try to load the content of right disk page
-			page->pra_vaddr = addr;
             assert(page_insert(pgdir, page, addr, perm) == 0);          //    into the memory which page managed.
             assert(swap_map_swappable(mm, addr, page, swap_init_ok) == 0);                 //(2) According to the mm, addr AND page, setup the map of phy addr <---> logical addr
-                                    									//(3) make the page swappable.
+            page->pra_vaddr = addr;                        									//(3) make the page swappable.
         }
         else {
             cprintf("no swap_init_ok but ptep is %x, failed\n",*ptep);
             goto failed;
         }
    }
-#endif
    ret = 0;
 failed:
     return ret;
+}
+
+bool
+user_mem_check(struct mm_struct *mm, uintptr_t addr, size_t len, bool write) {
+    if (mm != NULL) {
+        if (!USER_ACCESS(addr, addr + len)) {
+            return 0;
+        }
+        struct vma_struct *vma;
+        uintptr_t start = addr, end = addr + len;
+        while (start < end) {
+            if ((vma = find_vma(mm, start)) == NULL || start < vma->vm_start) {
+                return 0;
+            }
+            if (!(vma->vm_flags & ((write) ? VM_WRITE : VM_READ))) {
+                return 0;
+            }
+            if (write && (vma->vm_flags & VM_STACK)) {
+                if (start < vma->vm_start + PGSIZE) { //check stack start & size
+                    return 0;
+                }
+            }
+            start = vma->vm_end;
+        }
+        return 1;
+    }
+    return KERN_ACCESS(addr, addr + len);
 }
 
 

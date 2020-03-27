@@ -6,6 +6,8 @@
 #include <memlayout.h>
 #include <pmm.h>
 #include <mmu.h>
+#include <default_pmm.h>
+#include <kdebug.h>
 
 // the valid vaddr for check is between 0~CHECK_VALID_VADDR-1
 #define CHECK_VALID_VIR_PAGE_NUM 5
@@ -130,6 +132,7 @@ swap_in(struct mm_struct *mm, uintptr_t addr, struct Page **ptr_result)
      {
         assert(r!=0);
      }
+	 cprintf("pid: %d\n", current->pid);
      cprintf("swap_in: load disk swap entry %d with swap_page in vadr 0x%x\n", (*ptep)>>8, addr);
      *ptr_result=result;
      return 0;
@@ -260,9 +263,12 @@ check_swap(void)
      } 
 
      //free_page(pte2page(*temp_ptep));
-     
+    free_page(pde2page(pgdir[0]));
+     pgdir[0] = 0;
+     mm->pgdir = NULL;
      mm_destroy(mm);
-         
+     check_mm_struct = NULL;
+     
      nr_free = nr_free_store;
      free_list = free_list_store;
 

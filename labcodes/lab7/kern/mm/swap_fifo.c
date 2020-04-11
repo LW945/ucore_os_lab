@@ -76,7 +76,6 @@ _fifo_swap_out_victim(struct mm_struct *mm, struct Page ** ptr_page, int in_tick
 
 static int
 _fifo_check_swap(void) {
-	extern struct mm_struct *check_mm_struct;
     cprintf("write Virt Page c in fifo_check_swap\n");
     *(unsigned char *)0x3000 = 0x0c;
     assert(pgfault_num==4);

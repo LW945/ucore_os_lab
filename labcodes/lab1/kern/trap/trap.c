@@ -39,6 +39,7 @@ idt_init(void) {
 	for(int i=0;i<256;i++){
 		SETGATE(idt[i], 0, GD_KTEXT, __vectors[i], DPL_KERNEL);	
 	}
+	SETGATE(idt[T_SYSCALL], 1, GD_KTEXT, __vectors[T_SYSCALL], DPL_USER);
 	lidt(&idt_pd);
 
      /* (1) Where are the entry addrs of each Interrupt Service Routine (ISR)?

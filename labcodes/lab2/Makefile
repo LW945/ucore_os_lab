@@ -23,19 +23,21 @@ GCCPREFIX := $(shell if i386-elf-objdump -i 2>&1 | grep '^elf32-i386$$' >/dev/nu
 endif
 
 # try to infer the correct QEMU
-ifndef QEMU
-QEMU := $(shell if which qemu-system-i386 > /dev/null; \
-	then echo 'qemu-system-i386'; exit; \
-	elif which i386-elf-qemu > /dev/null; \
-	then echo 'i386-elf-qemu'; exit; \
-	elif which qemu > /dev/null; \
-	then echo 'qemu'; exit; \
-	else \
-	echo "***" 1>&2; \
-	echo "*** Error: Couldn't find a working QEMU executable." 1>&2; \
-	echo "*** Is the directory containing the qemu binary in your PATH" 1>&2; \
-	echo "***" 1>&2; exit 1; fi)
-endif
+#ifndef QEMU
+#QEMU := $(shell if which qemu-system-i386 > /dev/null; \
+#	then echo 'qemu-system-i386'; exit; \
+#	elif which i386-elf-qemu > /dev/null; \
+#	then echo 'i386-elf-qemu'; exit; \
+#	elif which qemu > /dev/null; \
+#	then echo 'qemu'; exit; \
+#	else \
+#	echo "***" 1>&2; \
+#	echo "*** Error: Couldn't find a working QEMU executable." 1>&2; \
+#	echo "*** Is the directory containing the qemu binary in your PATH" 1>&2; \
+#	echo "***" 1>&2; exit 1; fi)
+#endif
+
+QEMU := /home/li/software/qemu/qemu-4.2.0/i386-softmmu/qemu-system-i386
 
 # eliminate default suffix rules
 .SUFFIXES: .c .S .h
@@ -234,7 +236,7 @@ QEMUOPTS = -hda $(UCOREIMG)
 qemu-mon: $(UCOREIMG)
 	$(V)$(QEMU)  -no-reboot -monitor stdio $(QEMUOPTS) -serial null
 qemu: $(UCOREIMG)
-	$(V)$(QEMU)  -no-reboot -parallel stdio $(QEMUOPTS) -serial null
+	$(V)$(QEMU) -accel tcg -no-reboot -parallel stdio $(QEMUOPTS) -serial null
 
 qemu-nox: $(UCOREIMG)
 	$(V)$(QEMU)  -no-reboot -serial mon:stdio $(QEMUOPTS) -nographic
